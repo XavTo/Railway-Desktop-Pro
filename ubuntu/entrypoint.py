@@ -187,7 +187,8 @@ if os.environ.get('DESKTOP_APP') == 'chromium':
         browser_args += ['--disable-background-networking', '--disable-component-update',
             '--disable-sync', '--disable-domain-reliability', '--no-pings',
             '--disable-background-mode', '--disable-notifications',
-            '--disable-features=MediaRouter',
+            '--disable-features=MediaRouter,OptimizationGuideModelDownloading,'
+            'OptimizationHintsFetching,OptimizationTargetPrediction,OptimizationHints',
             # GCM ignores the background-networking switch. Its supported
             # endpoint overrides affect push messaging, never page requests.
             '--gcm-checkin-url=https://127.0.0.1:9',

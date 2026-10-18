@@ -49,3 +49,5 @@ For an on-demand validation/workstation service, enable Railway Serverless and r
 Close the noVNC tab to allow inactivity. Open pages that make background requests can still prevent sleep. Railway normally sleeps an idle service after 5–10 minutes without outbound traffic; reconnecting wakes it and can involve a cold start. Keep files and profiles under `/config`; save work before leaving an on-demand desktop. Storage and backups remain billable while compute sleeps.
 
 With `SERVERLESS_FRIENDLY=true`, Chromium web push notifications and Google Cloud Messaging are disabled to avoid recurring registration traffic. Normal page browsing remains available; keep this option off if you need push notifications.
+
+The optional serverless mode also disables Chrome Optimization Guide hints and prediction-model downloads, which can otherwise repeatedly fetch models while the browser is idle.
