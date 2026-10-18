@@ -185,7 +185,9 @@ if os.environ.get('DESKTOP_APP') == 'chromium':
     # Page requests and normal interactive browsing remain enabled.
     if os.environ.get('SERVERLESS_FRIENDLY', '').lower() in {'1', 'true', 'yes'}:
         browser_args += ['--disable-background-networking', '--disable-component-update',
-            '--disable-sync', '--disable-domain-reliability', '--no-pings']
+            '--disable-sync', '--disable-domain-reliability', '--no-pings',
+            '--disable-background-mode', '--disable-notifications',
+            '--disable-features=GCM,MediaRouter']
     launch('browser', browser_args + ['https://example.com'])
 
 def stop(*args):

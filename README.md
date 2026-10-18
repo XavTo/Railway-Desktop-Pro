@@ -47,3 +47,5 @@ Community packaging, not affiliated with Canonical, Google, Railway or Accetto. 
 For an on-demand validation/workstation service, enable Railway Serverless and redeploy so the setting applies to the actual container. For Chromium, also set `SERVERLESS_FRIENDLY=true` to suppress browser housekeeping traffic, component updates and browser-account sync. Normal page loading remains available. This option is off by default and does not change other deployed services.
 
 Close the noVNC tab to allow inactivity. Open pages that make background requests can still prevent sleep. Railway normally sleeps an idle service after 5–10 minutes without outbound traffic; reconnecting wakes it and can involve a cold start. Keep files and profiles under `/config`; save work before leaving an on-demand desktop. Storage and backups remain billable while compute sleeps.
+
+With `SERVERLESS_FRIENDLY=true`, Chromium web push notifications and Google Cloud Messaging are disabled to avoid recurring registration traffic. Normal page browsing remains available; keep this option off if you need push notifications.
