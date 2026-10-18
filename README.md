@@ -1,6 +1,6 @@
 # Railway Desktop Pro
 
-Private **Ubuntu 24.04 XFCE desktop** and **Chromium remote browser** templates for Railway. These use pinned Accetto Ubuntu/noVNC images and a small process supervisor compatible with Railway's own PID 1.
+Private **Ubuntu 24.04 XFCE desktop** and **Chromium remote browser** templates for Railway. Ubuntu uses a pinned Accetto Ubuntu/noVNC image; Chromium uses a pinned Debian base and its maintained security repository with a small process supervisor compatible with Railway's own PID 1.
 
 Each template has one service and a persistent `/config` home. It generates a unique strong web password, exposes one authenticated HTTP port through Railway HTTPS, and includes daily and weekly volume backup schedules in the template configuration.
 

@@ -92,7 +92,8 @@ http {
 }
 '''.replace('0.0.0.0:PORT', '0.0.0.0:' + str(port))
 Path('/run/desktop-nginx.conf').write_text(nginx)
-Path('/usr/libexec/noVNCdim/index.html').write_text(
+novnc_home = Path(os.environ.get('NOVNC_HOME', '/usr/libexec/noVNCdim'))
+(novnc_home / 'index.html').write_text(
     '<!doctype html><html><head><meta charset="utf-8">'
     '<meta http-equiv="refresh" content="0;url=/vnc.html?autoconnect=true&amp;resize=remote&amp;reconnect=true">'
     '<title>Private Railway desktop</title></head><body>Connecting to your private desktop…</body></html>')
@@ -153,7 +154,7 @@ for folder in ['/tmp/.X11-unix', '/tmp/.ICE-unix']:
     os.chmod(folder, 0o1777)
 for stale in [Path('/tmp/.X1-lock'), Path('/tmp/.X11-unix/X1')]:
     stale.unlink(missing_ok=True)
-launch('display', ['Xvnc', ':1', '-geometry', resolution, '-depth', '24', '-rfbport', '5901',
+launch('display', [shutil.which('Xvnc') or 'Xtigervnc', ':1', '-geometry', resolution, '-depth', '24', '-rfbport', '5901',
     '-localhost', '-ac', '-SecurityTypes', 'None', '-AlwaysShared', '-nolisten', 'tcp'])
 deadline = time.monotonic() + 45
 while not display_ready():
@@ -162,8 +163,8 @@ while not display_ready():
         raise SystemExit('The graphical display did not start')
     time.sleep(0.5)
 launch('desktop', ['dbus-run-session', '--', 'startxfce4'])
-launch('websocket', ['/usr/libexec/noVNCdim/utils/websockify/run',
-    '--web', '/usr/libexec/noVNCdim', '127.0.0.1:6901', '127.0.0.1:5901'])
+launch('websocket', [shutil.which('websockify') or str(novnc_home / 'utils/websockify/run'),
+    '--web', str(novnc_home), '127.0.0.1:6901', '127.0.0.1:5901'])
 launch('proxy', ['nginx', '-c', '/run/desktop-nginx.conf', '-g', 'daemon off;'], user=False)
 if os.environ.get('DESKTOP_APP') == 'chromium':
     browser = shutil.which('chromium') or shutil.which('chromium-browser')
