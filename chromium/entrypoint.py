@@ -72,7 +72,6 @@ http {
       proxy_connect_timeout 2s;
       proxy_read_timeout 8s;
     }
-    location = / { rewrite ^ /vnc.html?autoconnect=true&resize=remote&reconnect=true last; }
     location /files/ {
       alias /config/Downloads/;
       autoindex on;
@@ -93,6 +92,10 @@ http {
 }
 '''.replace('0.0.0.0:PORT', '0.0.0.0:' + str(port))
 Path('/run/desktop-nginx.conf').write_text(nginx)
+Path('/usr/libexec/noVNCdim/index.html').write_text(
+    '<!doctype html><html><head><meta charset="utf-8">'
+    '<meta http-equiv="refresh" content="0;url=/vnc.html?autoconnect=true&amp;resize=remote&amp;reconnect=true">'
+    '<title>Private Railway desktop</title></head><body>Connecting to your private desktop…</body></html>')
 
 environment = os.environ.copy()
 environment.update(HOME='/config', USER='headless', LOGNAME='headless', DISPLAY=':1',
