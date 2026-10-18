@@ -177,9 +177,16 @@ if os.environ.get('DESKTOP_APP') == 'chromium':
     for name in ['SingletonLock', 'SingletonSocket', 'SingletonCookie']:
         (profile / name).unlink(missing_ok=True)
     os.chown(profile, account.pw_uid, account.pw_gid)
-    launch('browser', [browser, '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+    browser_args = [browser, '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
         '--no-first-run', '--no-default-browser-check', '--password-store=basic',
-        '--user-data-dir=/config/.config/chromium', '--start-maximized', 'https://example.com'])
+        '--user-data-dir=/config/.config/chromium', '--start-maximized']
+    # Optional on-demand test workstations: suppress Chromium's own housekeeping
+    # traffic so it does not keep an otherwise idle Railway service awake.
+    # Page requests and normal interactive browsing remain enabled.
+    if os.environ.get('SERVERLESS_FRIENDLY', '').lower() in {'1', 'true', 'yes'}:
+        browser_args += ['--disable-background-networking', '--disable-component-update',
+            '--disable-sync', '--disable-domain-reliability', '--no-pings']
+    launch('browser', browser_args + ['https://example.com'])
 
 def stop(*args):
     stopping.set()

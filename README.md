@@ -41,3 +41,9 @@ Use the Railway volume backup controls to restore data; changing or deleting the
 - [noVNC](https://github.com/novnc/noVNC)
 
 Community packaging, not affiliated with Canonical, Google, Railway or Accetto. Upstream components retain their respective licenses; this repository's wrapper and documentation are MIT licensed.
+
+## Optional serverless workstations
+
+For an on-demand validation/workstation service, enable Railway Serverless and redeploy so the setting applies to the actual container. For Chromium, also set `SERVERLESS_FRIENDLY=true` to suppress browser housekeeping traffic, component updates and browser-account sync. Normal page loading remains available. This option is off by default and does not change other deployed services.
+
+Close the noVNC tab to allow inactivity. Open pages that make background requests can still prevent sleep. Railway normally sleeps an idle service after 5–10 minutes without outbound traffic; reconnecting wakes it and can involve a cold start. Keep files and profiles under `/config`; save work before leaving an on-demand desktop. Storage and backups remain billable while compute sleeps.
