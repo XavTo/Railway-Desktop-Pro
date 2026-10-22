@@ -51,3 +51,8 @@ Close the noVNC tab to allow inactivity. Open pages that make background request
 With `SERVERLESS_FRIENDLY=true`, Chromium web push notifications and Google Cloud Messaging are disabled to avoid recurring registration traffic. Normal page browsing remains available; keep this option off if you need push notifications.
 
 The optional serverless mode also disables Chrome Optimization Guide hints and prediction-model downloads, which can otherwise repeatedly fetch models while the browser is idle.
+
+
+## Microsoft Edge
+
+The `microsoft-edge` branch also includes the private Microsoft Edge desktop in [`edge/`](edge/README.md). Its Railway template uses this branch and `/edge` as its root; Ubuntu and Chromium deployments continue to use `main`.
