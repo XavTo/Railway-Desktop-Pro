@@ -24,6 +24,8 @@ Only nginx listens publicly. VNC, its WebSocket relay and the health server bind
 
 The anonymous `/healthz` route returns only readiness, and checks the actual X display, required child processes, XFCE session and internal VNC/WebSocket ports. It returns 503 when the desktop is not ready. A stopped required process ends the container so Railway can restart it. SIGTERM is forwarded to process groups to allow profiles to close before redeploy.
 
+Ubuntu checks the private listening sockets through Linux procfs without opening a VNC connection on each health poll. Its CPU-only VNC display explicitly disables DRI3 GPU probing. Notifications and file thumbnails are installed; the image's default XFCE panel excludes missing plugins and the physical battery indicator. These defaults apply to new profiles and never rewrite an existing `/config` profile. Ordinary XFCE notices about unavailable system power-management services can still appear in this container; diagnostic warnings are not globally hidden.
+
 Chromium uses `--disable-dev-shm-usage` for the small container shared-memory filesystem, CPU rendering, and `--no-sandbox` because the container runtime does not provide its normal desktop sandbox prerequisites. This is a private, single-session workstation; do not share access with untrusted users. There is no public browser automation/debugging API.
 
 ## Persistence and limits

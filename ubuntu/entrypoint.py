@@ -7,10 +7,11 @@ import pwd
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import threading
 import time
+
+from runtime_checks import has_loopback_listener
 
 password = os.environ.get('PASSWORD', '')
 username = os.environ.get('CUSTOM_USER', 'admin')
@@ -114,11 +115,8 @@ def launch(name, command, user=True):
         extra_groups=[] if user else None, start_new_session=True)
 
 def listening(port):
-    try:
-        with socket.create_connection(('127.0.0.1', port), timeout=1):
-            return True
-    except OSError:
-        return False
+    # Inspect the listening socket without creating a VNC client on every poll.
+    return has_loopback_listener(port)
 
 def display_ready():
     return subprocess.run(['xdpyinfo', '-display', ':1'], env=environment,
@@ -155,7 +153,8 @@ for folder in ['/tmp/.X11-unix', '/tmp/.ICE-unix']:
 for stale in [Path('/tmp/.X1-lock'), Path('/tmp/.X11-unix/X1')]:
     stale.unlink(missing_ok=True)
 launch('display', [shutil.which('Xvnc') or 'Xtigervnc', ':1', '-geometry', resolution, '-depth', '24', '-rfbport', '5901',
-    '-localhost', '-ac', '-SecurityTypes', 'None', '-AlwaysShared', '-nolisten', 'tcp'])
+    '-localhost', '-ac', '-SecurityTypes', 'None', '-AlwaysShared', '-nolisten', 'tcp',
+    '-rendernode', ''])
 deadline = time.monotonic() + 45
 while not display_ready():
     if children['display'].poll() is not None or time.monotonic() > deadline:
