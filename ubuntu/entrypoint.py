@@ -8,10 +8,12 @@ import re
 import shutil
 import signal
 import subprocess
+from tempfile import TemporaryDirectory
 import threading
 import time
 
 from runtime_checks import has_loopback_listener
+from startup_resources import wait_for_resources
 
 password = os.environ.get('PASSWORD', '')
 username = os.environ.get('CUSTOM_USER', 'admin')
@@ -29,19 +31,31 @@ if not (800 <= width <= 2560 and 600 <= height <= 1440):
 
 account = pwd.getpwnam('headless')
 home = Path('/config')
-home.mkdir(exist_ok=True)
-# Seed only missing top-level paths. Never overwrite a user's profile on redeploy.
-for source in Path('/opt/desktop-seed').iterdir():
-    target = home / source.name
-    if not target.exists() and not target.is_symlink():
-        if source.is_dir():
-            shutil.copytree(source, target, symlinks=True)
-        else:
-            shutil.copy2(source, target, follow_symlinks=False)
-for name in ['Downloads', 'Desktop', '.config', '.cache', '.local/share', '.runtime']:
-    (home / name).mkdir(parents=True, exist_ok=True)
-subprocess.run(['chown', '-R', 'headless:headless', str(home)], check=True)
-os.chmod(home / '.runtime', 0o700)
+
+
+def prepare_home():
+    home.mkdir(exist_ok=True)
+    # Seed missing paths atomically so a failed copy can be retried.
+    for source in Path('/opt/desktop-seed').iterdir():
+        target = home / source.name
+        if target.exists() or target.is_symlink():
+            continue
+        with TemporaryDirectory(dir=home, prefix='.desktop-seed-') as staging:
+            candidate = Path(staging) / source.name
+            if source.is_dir():
+                shutil.copytree(source, candidate, symlinks=True)
+            else:
+                shutil.copy2(source, candidate, follow_symlinks=False)
+            if not target.exists() and not target.is_symlink():
+                candidate.rename(target)
+    for name in ['Downloads', 'Desktop', '.config', '.cache', '.local/share', '.runtime']:
+        (home / name).mkdir(parents=True, exist_ok=True)
+    subprocess.run(['chown', '-R', 'headless:headless', str(home)], check=True)
+    os.chmod(home / '.runtime', 0o700)
+
+
+if not wait_for_resources(home, port, prepare_home):
+    raise SystemExit(0)
 subprocess.run(['chpasswd'], input='headless:' + password + '\n', text=True, check=True)
 
 hashed = subprocess.run(['openssl', 'passwd', '-6', '-stdin'], input=password,

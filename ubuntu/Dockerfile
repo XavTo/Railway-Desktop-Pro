@@ -7,7 +7,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && usermod -d /config headless \
     && rm -f /dockerstartup/.initial_sudo_password
 COPY entrypoint.py /opt/railway-desktop.py
-COPY runtime_checks.py configure_defaults.py /opt/
+COPY runtime_checks.py startup_resources.py configure_defaults.py /opt/
 RUN python3 /opt/configure_defaults.py
 ENV HOME=/config PORT=3000 VNC_RESOLUTION=1440x900
 WORKDIR /config
