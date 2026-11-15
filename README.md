@@ -34,7 +34,7 @@ Only data under `/config` survives a restart or redeploy: files, downloads, desk
 
 This is a desktop container, not a full VM or systemd server. Sessions are shared by clients using the same login. GPU, audio/video conferencing and independent multi-user sessions are not part of these templates. Allow about 1–2 GB RAM for ordinary use; browser tabs can require more. Normal Railway usage and backup billing apply.
 
-Ubuntu shows a diagnostic page when the service has less than 500 MB of RAM, the `/config` volume is missing or read-only, or it has less than 32 MiB free. It rechecks every 15 seconds and starts the desktop once the issue is resolved.
+Ubuntu shows a diagnostic page when the service has less than 500 MB of RAM, the `/config` volume is missing or read-only, or it has less than 32 MiB free. The service rechecks every 15 seconds and starts the desktop if resources become available. If the issue persists for 10 minutes, the service stops cleanly. Adjust the resources, then restart the deployment in Railway.
 
 Use the Railway volume backup controls to restore data; changing or deleting the volume discards its files. Review image updates and back up before upgrading. Immutable image digests keep a tested upstream version reproducible; package installation during the build still receives Ubuntu repository updates.
 

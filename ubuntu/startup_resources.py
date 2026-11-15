@@ -9,11 +9,13 @@ import signal
 import socket
 import subprocess
 import threading
+import time
 
 MIB = 1024 ** 2
 MIN_MEMORY = 500_000_000
 MIN_FREE = 32 * MIB
 CHECK_INTERVAL = 15
+RESOURCE_WAIT_SECONDS = 10 * 60
 STORAGE_ERRORS = {
     errno.ENOSPC: 'The /config volume is full. Free some space or expand the volume in Railway.',
     errno.EDQUOT: 'The /config volume has reached its storage quota. Free some space or expand the volume.',
@@ -73,7 +75,9 @@ class StartupHandler(http.server.BaseHTTPRequestHandler):
                     '<style>body{font:1rem system-ui;max-width:42rem;margin:8vh auto;padding:0 1rem;'
                     'line-height:1.6}</style><title>Desktop waiting for resources</title>'
                     '<h1>Desktop waiting for resources</h1>'
-                    f'<ul>{problems}</ul><p>The desktop starts when the resources are available.</p>'
+                    f'<ul>{problems}</ul><p>The desktop starts once the resources are available. '
+                    'If the issue persists for 10 minutes, the service stops. Adjust the resources '
+                    'and restart the deployment in Railway.</p>'
                     '</html>').encode()
             kind = 'text/html; charset=utf-8'
         else:
@@ -123,6 +127,7 @@ def wait_for_resources(home, port, prepare_home):
     problems = attempt()
     if not problems:
         return True
+    deadline = time.monotonic() + RESOURCE_WAIT_SECONDS
     stop = threading.Event()
     handlers = {sig: signal.signal(sig, lambda *_: stop.set())
                 for sig in (signal.SIGTERM, signal.SIGINT)}
@@ -133,11 +138,14 @@ def wait_for_resources(home, port, prepare_home):
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
-                while not stop.wait(CHECK_INTERVAL):
+                while not stop.wait(max(0, min(CHECK_INTERVAL, deadline - time.monotonic()))):
                     problems = attempt()
                     if not problems:
                         print('[railway] Startup resources available. Starting the desktop.', flush=True)
                         return True
+                    if time.monotonic() >= deadline:
+                        print('[railway] Resources still insufficient after 10 minutes. Stopping the service.', flush=True)
+                        return False
                     server.problems = problems
                 return False
             finally:

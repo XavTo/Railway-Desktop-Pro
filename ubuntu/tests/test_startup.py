@@ -103,5 +103,20 @@ class StartupResourcesTests(unittest.TestCase):
         prepare.assert_called_once_with()
 
 
+    @patch('startup_resources.signal.signal')
+    @patch('startup_resources.threading.Thread')
+    @patch('startup_resources.threading.Event')
+    @patch('startup_resources.StartupServer')
+    @patch('startup_resources.time.monotonic', side_effect=[0, 597, 600])
+    def test_deadline_rechecks_and_exits_without_initializing_when_still_blocked(self, _clock, _server, event, *_):
+        prepare = Mock()
+        event.return_value.wait.return_value = False
+        with patch('startup_resources.resource_problems', return_value=['storage too small']) as check:
+            self.assertFalse(wait_for_resources(pathlib.Path('/config'), 3000, prepare))
+        self.assertEqual(check.call_count, 2)
+        event.return_value.wait.assert_called_once_with(3)
+        prepare.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
