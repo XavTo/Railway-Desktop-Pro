@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 import threading
 import time
 
-from runtime_checks import has_loopback_listener
+from runtime_checks import has_loopback_listener, monitor_desktop, signal_process_group
 from startup_resources import wait_for_resources
 
 password = os.environ.get('PASSWORD', '')
@@ -133,9 +133,12 @@ def listening(port):
     return has_loopback_listener(port)
 
 def display_ready():
-    return subprocess.run(['xdpyinfo', '-display', ':1'], env=environment,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3,
-        user=account.pw_uid, group=account.pw_gid, extra_groups=[]).returncode == 0
+    try:
+        return subprocess.run(['xdpyinfo', '-display', ':1'], env=environment,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3,
+            user=account.pw_uid, group=account.pw_gid, extra_groups=[]).returncode == 0
+    except subprocess.TimeoutExpired:
+        return False
 
 def process_exists(name):
     return subprocess.run(['pgrep', '-u', str(account.pw_uid), '-x', name],
@@ -172,10 +175,15 @@ launch('display', [shutil.which('Xvnc') or 'Xtigervnc', ':1', '-geometry', resol
 deadline = time.monotonic() + 45
 while not display_ready():
     if children['display'].poll() is not None or time.monotonic() > deadline:
-        subprocess.run(['xdpyinfo', '-display', ':1'], env=environment, stdout=subprocess.DEVNULL)
         raise SystemExit('The graphical display did not start')
     time.sleep(0.5)
-launch('desktop', ['dbus-run-session', '--', 'startxfce4'])
+
+
+def start_desktop():
+    launch('desktop', ['dbus-run-session', '--', 'startxfce4'])
+
+
+start_desktop()
 launch('websocket', [shutil.which('websockify') or str(novnc_home / 'utils/websockify/run'),
     '--web', str(novnc_home), '127.0.0.1:6901', '127.0.0.1:5901'])
 launch('proxy', ['nginx', '-c', '/run/desktop-nginx.conf', '-g', 'daemon off;'], user=False)
@@ -214,21 +222,17 @@ def stop(*args):
 for sig in [signal.SIGTERM, signal.SIGINT]:
     signal.signal(sig, stop)
 print('[railway] Private desktop started; only the authenticated HTTP proxy is public.', flush=True)
-failed = False
-while not stopping.wait(1):
-    for name, process in children.items():
-        if process.poll() is not None:
-            print('[railway] Required process stopped: ' + name, flush=True)
-            failed = True
-            stopping.set()
-            break
-for process in reversed(list(children.values())):
-    if process.poll() is None:
-        os.killpg(process.pid, signal.SIGTERM)
-for process in children.values():
-    try:
-        process.wait(timeout=8)
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-server.shutdown()
-raise SystemExit(1 if failed else 0)
+try:
+    clean_exit = monitor_desktop(children, stopping, start_desktop)
+finally:
+    stopping.set()
+    for process in reversed(list(children.values())):
+        signal_process_group(process, signal.SIGTERM)
+    for process in children.values():
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            signal_process_group(process, signal.SIGKILL)
+            process.wait()
+    server.shutdown()
+raise SystemExit(0 if clean_exit else 1)

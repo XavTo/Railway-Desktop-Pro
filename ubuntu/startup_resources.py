@@ -67,6 +67,7 @@ class StartupHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/healthz':
             body, kind = b'waiting-for-resources\n', 'text/plain'
+            status = 503
         elif self.path == '/':
             problems = ''.join(f'<li>{escape(problem)}</li>' for problem in self.server.problems)
             body = ('<!doctype html><html lang="en"><meta charset="utf-8">'
@@ -80,10 +81,11 @@ class StartupHandler(http.server.BaseHTTPRequestHandler):
                     'and restart the deployment in Railway.</p>'
                     '</html>').encode()
             kind = 'text/html; charset=utf-8'
+            status = 200
         else:
             self.send_error(404)
             return
-        self.send_response(200)
+        self.send_response(status)
         self.send_header('Content-Type', kind)
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')

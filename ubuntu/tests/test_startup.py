@@ -1,3 +1,4 @@
+import io
 import os
 import pathlib
 import sys
@@ -8,8 +9,8 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from configure_defaults import clean_panel
-from runtime_checks import has_loopback_listener
-from startup_resources import MIN_FREE, memory_limit, resource_problems, wait_for_resources
+from runtime_checks import has_loopback_listener, monitor_desktop
+from startup_resources import MIN_FREE, StartupHandler, memory_limit, resource_problems, wait_for_resources
 
 
 class ReadinessTests(unittest.TestCase):
@@ -31,6 +32,39 @@ class ReadinessTests(unittest.TestCase):
             table = pathlib.Path(folder) / 'tcp'
             table.write_text('empty\nmalformed row\n')
             self.assertFalse(has_loopback_listener(5901, table))
+
+
+class DesktopRecoveryTests(unittest.TestCase):
+    @patch('runtime_checks.signal_process_group')
+    def test_clean_logout_restarts_only_the_session(self, terminate):
+        old_session = Mock(poll=Mock(return_value=0))
+        display = Mock(poll=Mock(return_value=None))
+        proxy = Mock(poll=Mock(return_value=None))
+        new_session = Mock(poll=Mock(return_value=None))
+        children = {'display': display, 'desktop': old_session, 'proxy': proxy}
+        stopping = Mock(wait=Mock(side_effect=[False, False, True]))
+        restart = Mock(side_effect=lambda: children.update(desktop=new_session))
+
+        self.assertTrue(monitor_desktop(children, stopping, restart))
+        restart.assert_called_once()
+        self.assertIs(terminate.call_args.args[0], old_session)
+        self.assertEqual(children, {'display': display, 'desktop': new_session, 'proxy': proxy})
+
+    @patch('runtime_checks.signal_process_group')
+    def test_session_recovery_is_bounded_after_repeated_failures(self, _):
+        children = {'desktop': Mock(poll=Mock(return_value=1))}
+        stopping = Mock(wait=Mock(return_value=False))
+        restart = Mock()
+
+        self.assertFalse(monitor_desktop(children, stopping, restart))
+        self.assertEqual(restart.call_count, 3)
+
+    def test_does_not_restart_xfce_when_the_underlying_display_has_failed(self):
+        children = {'desktop': Mock(poll=Mock(return_value=0)), 'display': Mock(poll=Mock(return_value=1))}
+        restart = Mock()
+
+        self.assertFalse(monitor_desktop(children, Mock(wait=Mock(return_value=False)), restart))
+        restart.assert_not_called()
 
 
 class DefaultPanelTests(unittest.TestCase):
@@ -62,6 +96,21 @@ class DefaultPanelTests(unittest.TestCase):
 
 
 class StartupResourcesTests(unittest.TestCase):
+    def test_reports_unready_to_healthz_but_serves_the_diagnostic_page(self):
+        for path, status in [('/healthz', 503), ('/', 200)]:
+            with self.subTest(path=path):
+                handler = object.__new__(StartupHandler)
+                handler.path = path
+                handler.server = Mock(problems=['The volume is full.'])
+                handler.send_response = Mock()
+                handler.send_header = Mock()
+                handler.end_headers = Mock()
+                handler.wfile = io.BytesIO()
+                handler.do_GET()
+                handler.send_response.assert_called_once_with(status)
+                self.assertIn(b'waiting-for-resources' if path == '/healthz' else b'The volume is full.',
+                              handler.wfile.getvalue())
+
     def test_container_memory_limit_and_unlimited_case(self):
         with tempfile.TemporaryDirectory() as folder:
             root = pathlib.Path(folder)

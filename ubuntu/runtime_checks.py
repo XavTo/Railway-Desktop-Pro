@@ -1,5 +1,8 @@
 """Non-invasive readiness checks for the Linux desktop container."""
 from pathlib import Path
+import os
+import signal
+import time
 
 
 def has_loopback_listener(port, table_path='/proc/net/tcp'):
@@ -18,3 +21,39 @@ def has_loopback_listener(port, table_path='/proc/net/tcp'):
                        for fields in (line.split() for line in table))
     except OSError:
         return False
+
+
+def signal_process_group(process, signum):
+    try:
+        os.killpg(process.pid, signum)
+    except ProcessLookupError:
+        pass
+
+
+def monitor_desktop(children, stopping, start_desktop):
+    """Recover the XFCE session in place while the display and proxy stay up."""
+    session_started = time.monotonic()
+    quick_exits = 0
+    while not stopping.wait(1):
+        for name, process in tuple(children.items()):
+            if name != 'desktop' and (exit_code := process.poll()) is not None:
+                print(f'[railway] Required process {name} exited with status {exit_code}.', flush=True)
+                return False
+
+        process = children['desktop']
+        exit_code = process.poll()
+        if exit_code is None:
+            continue
+        if time.monotonic() - session_started >= 60:
+            quick_exits = 0
+        quick_exits += 1
+        if quick_exits > 3:
+            print(f'[railway] XFCE repeatedly exited during startup (status {exit_code}).', flush=True)
+            return False
+        print(f'[railway] XFCE session exited (status {exit_code}); restarting session.', flush=True)
+        signal_process_group(process, signal.SIGTERM)
+        if stopping.wait(quick_exits):
+            break
+        start_desktop()
+        session_started = time.monotonic()
+    return True
