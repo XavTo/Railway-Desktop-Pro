@@ -8,7 +8,7 @@ import re
 import shutil
 import signal
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkdtemp
 import threading
 import time
 
@@ -16,13 +16,16 @@ from runtime_checks import has_loopback_listener, monitor_desktop, signal_proces
 from startup_resources import wait_for_resources
 
 password = os.environ.get('PASSWORD', '')
-username = os.environ.get('CUSTOM_USER', 'admin')
+username = os.environ.get('CUSTOM_USER') or 'admin'
 if len(password) < 16 or '\n' in password or '\r' in password:
     raise SystemExit('PASSWORD must contain at least 16 characters and no line breaks.')
 if not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', username):
     raise SystemExit('CUSTOM_USER must be a simple nonempty username.')
-port = int(os.environ.get('PORT', '3000'))
-resolution = os.environ.get('VNC_RESOLUTION', '1440x900')
+try:
+    port = int(os.environ.get('PORT') or '3000')
+except ValueError:
+    raise SystemExit('PORT must be a number between 1024 and 65535.') from None
+resolution = os.environ.get('VNC_RESOLUTION') or '1440x900'
 if not 1024 <= port <= 65535 or not re.fullmatch(r'\d{3,4}x\d{3,4}', resolution):
     raise SystemExit('Invalid PORT or VNC_RESOLUTION')
 width, height = map(int, resolution.split('x'))
@@ -48,14 +51,15 @@ def prepare_home():
                 shutil.copy2(source, candidate, follow_symlinks=False)
             if not target.exists() and not target.is_symlink():
                 candidate.rename(target)
-    for name in ['Downloads', 'Desktop', '.config', '.cache', '.local/share', '.runtime']:
+    for name in ['Downloads', 'Desktop', '.config', '.cache', '.local/share']:
         (home / name).mkdir(parents=True, exist_ok=True)
     subprocess.run(['chown', '-R', 'headless:headless', str(home)], check=True)
-    os.chmod(home / '.runtime', 0o700)
 
 
 if not wait_for_resources(home, port, prepare_home):
     raise SystemExit(0)
+session_runtime = Path(mkdtemp(prefix='desktop-xdg-', dir='/run'))
+os.chown(session_runtime, account.pw_uid, account.pw_gid)
 subprocess.run(['chpasswd'], input='headless:' + password + '\n', text=True, check=True)
 
 hashed = subprocess.run(['openssl', 'passwd', '-6', '-stdin'], input=password,
@@ -115,7 +119,7 @@ novnc_home = Path(os.environ.get('NOVNC_HOME', '/usr/libexec/noVNCdim'))
 
 environment = os.environ.copy()
 environment.update(HOME='/config', USER='headless', LOGNAME='headless', DISPLAY=':1',
-                   XDG_RUNTIME_DIR='/config/.runtime')
+                   XDG_RUNTIME_DIR=str(session_runtime))
 # Do not pass the web login password or unrelated Railway secrets to desktop apps.
 for name in list(environment):
     if name in {'PASSWORD', 'VNC_PW'} or 'TOKEN' in name or 'API_KEY' in name:
@@ -235,4 +239,5 @@ finally:
             signal_process_group(process, signal.SIGKILL)
             process.wait()
     server.shutdown()
+    shutil.rmtree(session_runtime, ignore_errors=True)
 raise SystemExit(0 if clean_exit else 1)

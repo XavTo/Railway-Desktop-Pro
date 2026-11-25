@@ -1,0 +1,78 @@
+name: Desktop container smoke test
+
+on:
+  push:
+    branches: [validation/desktop-startup]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu]
+    env:
+      DISTRO: ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --tag "desktop-test:$DISTRO" "$DISTRO"
+      - name: Verify startup, XFCE recovery, and volume persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+          password=$(openssl rand -hex 18)
+          name=desktop-smoke
+          volume=desktop-smoke-home
+          docker volume create "$volume" >/dev/null
+          cleanup() {
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            docker volume rm "$volume" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          start_desktop() {
+            docker run -d --name "$name" --memory 512m --publish 127.0.0.1::3000 \
+              --mount "type=volume,source=$volume,target=/config" \
+              --env "PASSWORD=$password" --env CUSTOM_USER= --env PORT= --env VNC_RESOLUTION= \
+              "desktop-test:$DISTRO" >/dev/null
+            address=$(docker port "$name" 3000/tcp)
+            for attempt in {1..45}; do
+              if curl -fsS --max-time 5 "http://$address/healthz" | grep -qx ready; then
+                return
+              fi
+              if [ "$(docker inspect --format '{{.State.Running}}' "$name")" != true ]; then
+                break
+              fi
+              sleep 2
+            done
+            docker logs --tail 60 "$name"
+            return 1
+          }
+
+          start_desktop
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "http://$address/vnc.html")" = 401
+          curl -fsS -u "admin:$password" "http://$address/vnc.html" -o /dev/null
+          old_pid=$(docker exec "$name" pgrep -u headless -xo xfce4-session)
+          docker exec "$name" kill -TERM "$old_pid"
+          for attempt in {1..30}; do
+            new_pid=$(docker exec "$name" pgrep -u headless -xo xfce4-session || true)
+            if [ -n "$new_pid" ] && [ "$new_pid" != "$old_pid" ] && curl -fsS --max-time 5 "http://$address/healthz" | grep -qx ready; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$new_pid"
+          test "$new_pid" != "$old_pid"
+          curl -fsS --max-time 5 "http://$address/healthz" | grep -qx ready
+          test "$(docker inspect --format '{{.RestartCount}}' "$name")" = 0
+          docker exec -u headless "$name" sh -c 'echo persisted > /config/railway-smoke.txt'
+          docker stop --time 15 "$name" >/dev/null
+          docker rm "$name" >/dev/null
+
+          start_desktop
+          test "$(docker exec -u headless "$name" cat /config/railway-smoke.txt)" = persisted

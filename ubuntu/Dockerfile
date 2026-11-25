@@ -1,6 +1,6 @@
 FROM accetto/ubuntu-vnc-xfce-g3@sha256:de1b03759a37b78a62a0b4f25d1e29a54e7500bbc2101109b2430a5574e055b2
 USER root
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nginx openssl dbus-x11 x11-utils xfce4-notifyd tumbler \
+RUN apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends nginx openssl dbus-x11 x11-utils xfce4-notifyd tumbler \
     && rm -rf /var/lib/apt/lists/* \
     && cp -a /home/headless /opt/desktop-seed \
     && chmod 644 /etc/passwd /etc/group \
